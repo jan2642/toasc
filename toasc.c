@@ -338,8 +338,8 @@ static void help(const char *name, int exitvalue) {
            "  -s, --noshape           disable the 'shape' component in the distance calculation\n"
            "  -n, --nonormalize       disable normalization of the image based on the selected characters\n"
            "  -c, --chars <charlist>  select the characters. (default = 32-254,-130-140,-145-156,-159)\n"
-           "                          other examples:   32-127           (plain ascii characters\n"
-           "                                            176-178,219-223  (shape blocks)\n"
+           "                          other examples:   32-127              (plain ascii characters\n"
+           "                                            32,176-178,219-223  (shape blocks)\n"
            "\n",
            name);
     exit(exitvalue);
