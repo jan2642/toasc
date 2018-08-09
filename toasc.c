@@ -21,8 +21,7 @@ typedef struct font_char_s {
     unsigned char num;
     int inverted;
     int allowed;
-    double avg;
-    double var;
+    int avg;
     unsigned char data[];
 } font_char_t;
 
@@ -30,9 +29,8 @@ typedef struct font_s {
     int nr_chars;
     int width;
     int height;
-    double min;
-    double max;
-    double adj;
+    int min;
+    int max;
     font_char_t *chars[];
 } font_t;
 
@@ -55,17 +53,15 @@ static void verbose(char *fmt, ...) {
 }
 
 /* Calculate the average value of an image */
-static double average(unsigned char *p1, int p1w, int w, int h) {
-    double sum = 0;
-    for (int y = 0; y < h; y++) {
-        for (int x = 0; x < w; x++) {
-            double t1 = p1[y * p1w + x];
-            sum += t1;
-        }
-    }
+static int average(unsigned char *p1, int p1w, int w, int h) {
+    int sum = 0;
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++)
+            sum += p1[y * p1w + x];
     return sum / (w * h);
 }
 
+#if 0
 /* Calculate the variance of an image */
 static double variance(unsigned char *p1, int p1w, double mu1, int w, int h) {
     double sum = 0;
@@ -90,6 +86,7 @@ static double covariance(unsigned char *p1, int p1w, double mu1, unsigned char *
     }
     return sum / (w * h);
 }
+#endif
 
 /* Load the image and resize it */
 static unsigned int image_load(char *filename, int width) {
@@ -183,7 +180,6 @@ static font_t *font_load(char *filename, int invert, int font_width, int font_he
     font->nr_chars = nr_chars;
     font->width = font_width;
     font->height = font_height;
-    font->adj = 1.0;
 
     double *k = gb_kernel(2.0, 2.0);
     
@@ -205,7 +201,9 @@ static font_t *font_load(char *filename, int invert, int font_width, int font_he
             //printf("\n");
         }
         fc->avg = average(fc->data, font->width, font->width, font->height);
+#if 0
         fc->var = variance(fc->data, font->width, fc->avg, font->width, font->height);
+#endif
 
         gb_blur(k, fc->data, font->width, font->width, font->height);
     }
@@ -224,7 +222,7 @@ static void font_normalize(font_t *f) {
             f->min = f->chars[c]->avg;
     }
 
-    verbose("MIN: %lf   MAX: %lf\n", f->min, f->max);
+    verbose("MIN: %d   MAX: %d\n", f->min, f->max);
 }
 
 static void font_free(font_t *f) {
@@ -242,11 +240,11 @@ static void font_set_allowed_range(font_t *f, int start, int end, int allowed) {
         f->chars[c]->allowed = allowed;
 }
 
-static double distance_diff(font_t *f, int c, unsigned char *p, int pw, int max_dist) {
-    double distance = 0;
+static int distance_diff(font_t *f, int c, unsigned char *p, int pw, int max_dist) {
+    int distance = 0;
     for (int y = 0; y < f->height; y++) {
         for (int x = 0; x < f->width; x++) {
-            double diff = fabs(((double)p[y * pw + x] + 0.1) * f->adj - ((double)f->chars[c]->data[y * f->width + x] + 0.1));
+            int diff = abs(p[y * pw + x] - f->chars[c]->data[y * f->width + x]);
             distance += (diff * diff);
         }
     }
@@ -254,16 +252,16 @@ static double distance_diff(font_t *f, int c, unsigned char *p, int pw, int max_
     return distance;
 }
 
-static double distance_avg_diff(font_t *f, int c, unsigned char *p, int pw, int max_dist) {
-    return f->width * f->height * fabs(f->chars[c]->avg - average(p, pw, f->width, f->height));
+static int distance_avg_diff(font_t *f, int c, unsigned char *p, int pw, int max_dist) {
+    return f->width * f->height * abs(f->chars[c]->avg - average(p, pw, f->width, f->height));
 } 
 
 static int find_lowest_distance(font_t *f, unsigned char *p, int pw, int flags) {
-    double min = DBL_MAX;
+    int min = INT_MAX;
     int min_c = 0;
     for (int c = 0; c < f->nr_chars; c++) {
         if (f->chars[c]->allowed) {
-            double fdist = 1.0, adist = 1.0;
+            int fdist = 1, adist = 1;
 
             if (flags & 1)
                 fdist = distance_diff(f, c, p, pw, min);
@@ -271,7 +269,7 @@ static int find_lowest_distance(font_t *f, unsigned char *p, int pw, int flags) 
             if (flags & 2)
                 adist = sqrt(distance_avg_diff(f, c, p, pw, min) + 0.1);
 
-            double dist = fdist * adist;
+            int dist = fdist * adist;
 
             if (dist < min) {
                 min = dist;
@@ -428,15 +426,15 @@ int main(int argc, char **argv) {
     gb_blur(k, img, pw, pw, ph);
 
     if (normalize) {
-        double img_min = 255.0;
-        double img_max = 0.0;
-        double range = font->max - font->min;
+        int img_min = 255;
+        int img_max = 0;
+        int range = font->max - font->min;
         for (int p = 0; p < pw * ph; p++) {
             if (img[p] < img_min) img_min = img[p];
             if (img[p] > img_max) img_max = img[p];
-            img[p] = (unsigned char)((double)img[p] * range / 255.0 + font->min);
+            img[p] = (unsigned char)((img[p] * range) / 255.0 + font->min);
         }
-        verbose("IMG: MIN: %lf  MAX: %lf\n", img_min, img_max);
+        verbose("IMG: MIN: %d  MAX: %d\n", img_min, img_max);
     }
 
     for (int y = 0; y < h; y++) {
