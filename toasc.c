@@ -246,6 +246,8 @@ static int distance_diff(font_t *f, int c, unsigned char *p, int pw, int max_dis
         for (int x = 0; x < f->width; x++) {
             int diff = abs(p[y * pw + x] - f->chars[c]->data[y * f->width + x]);
             distance += (diff * diff);
+            if (distance > max_dist)
+                return distance;
         }
     }
 
