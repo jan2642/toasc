@@ -7,6 +7,7 @@
 #include <math.h>
 #include <getopt.h>
 #include <stdarg.h>
+#include <pthread.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -328,6 +329,31 @@ static void parse_allowed_chars(font_t *f, char *str) {
     free(p);
 }
 
+typedef struct {
+    unsigned char * img;
+    unsigned char * output;
+    font_t * font;
+    int w;
+    int pw;
+    int yb;
+    int ye;
+    int flags;
+} work_t;
+
+static void * rasterize(void *w) {
+    work_t * work = w;
+    for (int y = work->yb; y < work->ye; y++) {
+        for (int x = 0; x < work->w; x++) {
+            unsigned char *p = &work->img[y * work->font->height * work->pw + x * work->font->width]; /* top left of char cell */
+            int c = find_lowest_distance(work->font, p, work->pw, work->flags);
+            work->output[y * (work->w + 1) + x] = work->font->chars[c]->num;
+        }
+        work->output[y * (work->w + 1) + work->w] = '\n';
+    }
+
+    return NULL;
+}
+
 static void help(const char *name, int exitvalue) {
     printf("Convert image to ASCII\n"
            "       %s [option] <in_file>\n"
@@ -371,11 +397,15 @@ int main(int argc, char **argv) {
 
     int flags = 3;
     int normalize = 1;
+    int num_threads = 1;
 
-    while ((opt = getopt_long(argc, (char * const *)argv, "nsac:iw:hv", longopts, 0)) != -1) {
+    while ((opt = getopt_long(argc, (char * const *)argv, "t:nsac:iw:hv", longopts, 0)) != -1) {
         switch (opt) {
             case 'n':
                 normalize = 0;
+                break;
+            case 't':
+                num_threads = atoi(optarg);
                 break;
             case 's':
                 flags &= ~1;
@@ -441,15 +471,31 @@ int main(int argc, char **argv) {
 
     unsigned char *output = calloc(1, (w + 1) * h);
 
-    for (int y = 0; y < h; y++) {
-        for (int x = 0; x < w; x++) {
-            unsigned char *p = &img[y * font->height * pw + x * font->width]; /* top left of char cell */
-            int c = find_lowest_distance(font, p, pw, flags);
-            output[y * (w + 1) + x] = font->chars[c]->num;
-        }
-        output[y * (w + 1) + w] = '\n';
+    pthread_t * threads = calloc(1, sizeof(pthread_t) * num_threads);
+    work_t * work = calloc(1, sizeof(work_t) * num_threads);
+
+    int step = (h + num_threads - 1) / num_threads;
+    int p = 0;
+    for (int i = 0; i < num_threads; i++) {
+        work[i].output = output;
+        work[i].font = font;
+        work[i].w = w;
+        work[i].pw = pw;
+        work[i].img = img;
+        work[i].yb = p;
+        work[i].ye = p + step;
+        if (work[i].ye > h) work[i].ye = h;
+        work[i].flags = flags;
+        p += step;
+        verbose("Thread %d: %d -> %d (%d)\n", i, work[i].yb, work[i].ye, h);
+        if(pthread_create(&threads[i], NULL, rasterize, &work[i]))
+            error("Error creating thread\n");
     }
-    
+
+    for (int i = 0; i < num_threads; i++)
+        if(pthread_join(threads[i], NULL))
+            error("Error joining thread\n");
+
     write(1, output, (w + 1) * h);
 
     font_free(font);

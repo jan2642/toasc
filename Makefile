@@ -1,6 +1,7 @@
 
 CC = $(CROSS_COMPILE)gcc
-CFLAGS += -I. -O3 -g -O0
+CFLAGS += -std=gnu99 -I. -O3 -g -O0
+LDFLAGS += -lm -lpthread
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
