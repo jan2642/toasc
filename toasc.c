@@ -439,15 +439,19 @@ int main(int argc, char **argv) {
         verbose("IMG: MIN: %d  MAX: %d\n", img_min, img_max);
     }
 
+    unsigned char *output = calloc(1, (w + 1) * h);
+
     for (int y = 0; y < h; y++) {
         for (int x = 0; x < w; x++) {
             unsigned char *p = &img[y * font->height * pw + x * font->width]; /* top left of char cell */
             int c = find_lowest_distance(font, p, pw, flags);
-            printf("%c", font->chars[c]->num);
+            output[y * (w + 1) + x] = font->chars[c]->num;
         }
-        printf("\n");
+        output[y * (w + 1) + w] = '\n';
     }
     
+    write(1, output, (w + 1) * h);
+
     font_free(font);
 }
 
