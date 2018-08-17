@@ -442,6 +442,10 @@ int main(int argc, char **argv) {
         input = (char *)argv[optind];
     }
 
+    if (access(input, R_OK) != 0) {
+        error("Could not read file: %s\n", input);
+    }
+
     font = font_load("ASCII8.ASC.png", invert, FONT_WIDTH, FONT_HEIGHT);
     parse_allowed_chars(font, characters);
 
